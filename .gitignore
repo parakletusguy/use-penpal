@@ -1,0 +1,13 @@
+node_modules/
+.next/
+*.tsbuildinfo
+.env.local
+.env*.local
+!.env.example
+
+# Supabase CLI temporary files and local data
+supabase/.temp/
+supabase/.branches/
+
+# Rendered working material
+tmp/
