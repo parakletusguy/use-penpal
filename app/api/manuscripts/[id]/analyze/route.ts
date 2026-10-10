@@ -1,6 +1,7 @@
 import mammoth from "mammoth";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createEditorialReview } from "@/lib/ai/editorial-review";
+import { sendReviewFailedAlert, sendReviewReadyAlert } from "@/lib/email/editorial-alerts";
 import { createClient } from "@/utils/supabase/server";
 
 function validId(value: string) {
@@ -36,6 +37,7 @@ export async function POST(
   if (manuscriptError || !manuscript) return NextResponse.json({ error: "Manuscript not found." }, { status: 404 });
   if (manuscript.consent_status !== "recorded") return NextResponse.json({ error: "Recorded consent is required before analysis." }, { status: 409 });
   if (!manuscript.original_storage_path) return NextResponse.json({ error: "Add a private .docx source copy before analysis." }, { status: 409 });
+  const manuscriptTitle = manuscript.title || "Untitled manuscript";
 
   const { data: existingReport } = await supabase
     .from("review_reports")
@@ -101,9 +103,16 @@ export async function POST(
     }
 
     await supabase.from("manuscripts").update({ analysis_completed_at: finishedAt, workflow_status: "ready_to_edit" }).eq("id", manuscriptId);
+    after(() => sendReviewReadyAlert({
+      findingCount: review.findings.length,
+      manuscriptId,
+      suggestionCount: review.suggestions.length,
+      title: manuscriptTitle,
+    }));
     return NextResponse.json({ findings: review.findings.length, suggestions: review.suggestions.length }, { status: 201 });
   } catch (error) {
     await supabase.from("manuscripts").update({ workflow_status: "ready_to_review" }).eq("id", manuscriptId);
+    after(() => sendReviewFailedAlert({ manuscriptId, title: manuscriptTitle }));
     const message = error instanceof Error ? error.message : "PenPal could not complete the review.";
     return NextResponse.json({ error: message }, { status: 422 });
   }

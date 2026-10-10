@@ -11,3 +11,6 @@ supabase/.branches/
 
 # Rendered working material
 tmp/
+
+.vercel
+.env*
