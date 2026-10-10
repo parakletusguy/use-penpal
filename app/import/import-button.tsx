@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   importVerifiedIJSDSBatch,
-  initialImportState,
 } from "@/app/import/actions";
+import type { ImportState } from "@/app/import/actions";
+
+const initialImportState: ImportState = { message: null, status: "idle" };
 
 export function ImportButton({ alreadyImported }: { alreadyImported: boolean }) {
   const router = useRouter();

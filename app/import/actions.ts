@@ -14,8 +14,6 @@ export type ImportState = {
   status: "error" | "idle" | "success";
 };
 
-export const initialImportState: ImportState = { message: null, status: "idle" };
-
 export async function importVerifiedIJSDSBatch(
   _previousState: ImportState,
   _formData: FormData,
