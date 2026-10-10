@@ -157,6 +157,18 @@ function readOpenAiOutputText(payload: unknown) {
   return text || null;
 }
 
+function readOpenAiErrorDetails(payload: unknown) {
+  if (!payload || typeof payload !== "object") return {};
+  const error = (payload as Record<string, unknown>).error;
+  if (!error || typeof error !== "object") return {};
+
+  const details = error as Record<string, unknown>;
+  return {
+    code: typeof details.code === "string" ? details.code : undefined,
+    type: typeof details.type === "string" ? details.type : undefined,
+  };
+}
+
 export async function createEditorialReview(manuscriptText: string) {
   const apiKey = process.env.OPENAI_API_KEY;
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
@@ -188,7 +200,14 @@ MANUSCRIPT END`;
     signal: AbortSignal.timeout(90_000),
   });
 
-  if (!response.ok) throw new Error("OpenAI could not generate a review.");
+  if (!response.ok) {
+    const errorPayload: unknown = await response.json().catch(() => null);
+    console.error("OpenAI editorial review request failed.", {
+      status: response.status,
+      ...readOpenAiErrorDetails(errorPayload),
+    });
+    throw new Error("OpenAI could not generate a review.");
+  }
   const payload: unknown = await response.json();
   const outputText = readOpenAiOutputText(payload);
   if (!outputText) throw new Error("OpenAI returned no usable review.");

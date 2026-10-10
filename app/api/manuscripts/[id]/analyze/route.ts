@@ -65,7 +65,7 @@ export async function POST(
       editor_id: editorId,
       generated_at: finishedAt,
       manuscript_id: manuscriptId,
-      model_provider: "gemini",
+      model_provider: "openai",
       report_content: { findingCount: review.findings.length, suggestionCount: review.suggestions.length },
       report_status: "final",
       rubric_version: "ijsds-editorial-v1",
@@ -111,6 +111,10 @@ export async function POST(
     }));
     return NextResponse.json({ findings: review.findings.length, suggestions: review.suggestions.length }, { status: 201 });
   } catch (error) {
+    console.error("PenPal editorial analysis failed.", {
+      manuscriptId,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
     await supabase.from("manuscripts").update({ workflow_status: "ready_to_review" }).eq("id", manuscriptId);
     after(() => sendReviewFailedAlert({ manuscriptId, title: manuscriptTitle }));
     const message = error instanceof Error ? error.message : "PenPal could not complete the review.";
