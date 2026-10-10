@@ -21,6 +21,7 @@ export async function importVerifiedIJSDSBatch(
   void _previousState;
   void _formData;
   const { editorId, supabase } = await requireEditor();
+  const manuscriptCount = IJSDS_INITIAL_MANUSCRIPTS.length;
   const sourceFileIds = IJSDS_INITIAL_MANUSCRIPTS.map(([fileId]) => fileId);
 
   const { count: existingCount, error: existingError } = await supabase
@@ -40,7 +41,7 @@ export async function importVerifiedIJSDSBatch(
       attention_file_count: 0,
       completed_at: new Date().toISOString(),
       editor_id: editorId,
-      import_notes: "Verified IJSDS Drive batch. AI consent recorded for all 20 manuscripts.",
+      import_notes: `Verified IJSDS Drive batch. AI consent recorded for all ${manuscriptCount} manuscripts.`,
       import_status: "complete",
       imported_file_count: IJSDS_INITIAL_MANUSCRIPTS.length,
       source_folder_id: IJSDS_INITIAL_FOLDER.id,
@@ -83,5 +84,5 @@ export async function importVerifiedIJSDSBatch(
   revalidatePath("/");
   revalidatePath("/import");
   revalidatePath("/manuscripts");
-  return { message: "20 manuscripts are ready in your workspace.", status: "success" };
+  return { message: `${manuscriptCount} manuscripts are ready in your workspace.`, status: "success" };
 }

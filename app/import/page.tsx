@@ -8,6 +8,7 @@ const steps = ["Folder verified", "Files validated", "Consent recorded", "Ready 
 
 export default async function ImportPage() {
   const { editorId, supabase } = await requireEditor();
+  const manuscriptCount = IJSDS_INITIAL_MANUSCRIPTS.length;
   const { count } = await supabase
     .from("manuscripts")
     .select("id", { count: "exact", head: true })
@@ -29,7 +30,7 @@ export default async function ImportPage() {
           <p className="eyebrow">Verified source</p>
           <h1 id="import-heading">Your IJSDS batch is ready to enter PenPal.</h1>
           <p className="lede">
-            The <strong>{IJSDS_INITIAL_FOLDER.name}</strong> folder contains 20 supported Word manuscripts.
+            The <strong>{IJSDS_INITIAL_FOLDER.name}</strong> folder contains {manuscriptCount} supported Word manuscripts.
             Every author’s AI consent has been recorded. Importing creates secure workspace records;
             it never moves, edits, or replaces the Google Drive originals.
           </p>
@@ -47,11 +48,11 @@ export default async function ImportPage() {
           <h2 id="drive-heading">Create the protected editorial batch.</h2>
           <dl className="import-facts">
             <div><dt>Folder</dt><dd>{IJSDS_INITIAL_FOLDER.name}</dd></div>
-            <div><dt>Manuscripts</dt><dd>20 Word documents</dd></div>
+            <div><dt>Manuscripts</dt><dd>{manuscriptCount} Word documents</dd></div>
             <div><dt>Source state</dt><dd>Originals remain in Google Drive</dd></div>
           </dl>
         </div>
-        <ImportButton alreadyImported={alreadyImported} />
+        <ImportButton alreadyImported={alreadyImported} manuscriptCount={manuscriptCount} />
       </section>
     </main>
   );

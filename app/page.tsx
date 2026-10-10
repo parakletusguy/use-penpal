@@ -48,7 +48,7 @@ export default async function Page() {
 
       <section className="metric-grid" aria-label="Workspace progress">
         <article><p>Batch</p><strong>{batch ? `${batch.imported_file_count} imported` : "Not imported"}</strong><span>{batch ? "IJSDS verified folder" : "Ready when you are"}</span></article>
-        <article><p>Private source copies</p><strong>{sourceReady} / {manuscripts.length || 20}</strong><span>Ready for AI analysis</span></article>
+        <article><p>Private source copies</p><strong>{sourceReady} / {manuscripts.length || batch?.imported_file_count || 0}</strong><span>Ready for AI analysis</span></article>
         <article><p>Review queue</p><strong>{reviewReady}</strong><span>Available to analyse now</span></article>
       </section>
 

@@ -10,7 +10,7 @@ import type { ImportState } from "@/app/import/actions";
 
 const initialImportState: ImportState = { message: null, status: "idle" };
 
-export function ImportButton({ alreadyImported }: { alreadyImported: boolean }) {
+export function ImportButton({ alreadyImported, manuscriptCount }: { alreadyImported: boolean; manuscriptCount: number }) {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState(importVerifiedIJSDSBatch, initialImportState);
 
@@ -19,7 +19,7 @@ export function ImportButton({ alreadyImported }: { alreadyImported: boolean }) 
   }, [alreadyImported, router, state.status]);
 
   if (alreadyImported) {
-    return <Link className="button button-primary" href="/manuscripts">Open 20 manuscripts</Link>;
+    return <Link className="button button-primary" href="/manuscripts">Open {manuscriptCount} manuscripts</Link>;
   }
 
   return (
