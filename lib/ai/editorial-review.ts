@@ -202,10 +202,14 @@ MANUSCRIPT END`;
 
   if (!response.ok) {
     const errorPayload: unknown = await response.json().catch(() => null);
+    const errorDetails = readOpenAiErrorDetails(errorPayload);
     console.error("OpenAI editorial review request failed.", {
       status: response.status,
-      ...readOpenAiErrorDetails(errorPayload),
+      ...errorDetails,
     });
+    if (response.status === 429 && errorDetails.code === "credit_balance_exhausted") {
+      throw new Error("OpenAI API credit balance is exhausted. Add API credits, then try the review again.");
+    }
     throw new Error("OpenAI could not generate a review.");
   }
   const payload: unknown = await response.json();
