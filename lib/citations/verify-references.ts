@@ -40,7 +40,7 @@ type ProviderMetadata = {
   title: string | null;
 };
 
-type Candidate = {
+export type Candidate = {
   id: string | null;
   lookupType: LookupType;
   metadata: ProviderMetadata;
@@ -60,6 +60,16 @@ export type ReferenceVerification = {
   status: VerificationStatus;
   statusReason: string;
   lookupType: LookupType;
+};
+
+export type CandidateAssessment = {
+  candidate: Candidate | null;
+  candidateCount: number;
+  confidence: number;
+  matchedFields: Record<string, boolean | number | null>;
+  runnerUpConfidence: number | null;
+  status: VerificationStatus;
+  statusReason: string;
 };
 
 export type CitationVerificationResult = {
@@ -201,10 +211,20 @@ function readCrossrefCandidate(value: unknown, lookupType: LookupType): Candidat
   };
 }
 
-function readOpenAlexCandidate(value: unknown): Candidate | null {
+function readCrossrefCandidates(value: unknown, lookupType: LookupType) {
+  const root = object(value);
+  const message = root ? object(root.message) : null;
+  const items = message && Array.isArray(message.items) ? message.items : [];
+  return items.flatMap((item) => {
+    const candidate = readCrossrefCandidate({ message: item }, lookupType);
+    return candidate ? [candidate] : [];
+  });
+}
+
+function readOpenAlexCandidate(value: unknown, itemIndex = 0): Candidate | null {
   const root = object(value);
   const results = root && Array.isArray(root.results) ? root.results : [];
-  const item = object(results[0]);
+  const item = object(results[itemIndex]);
   if (!item) return null;
   const authorships = Array.isArray(item.authorships) ? item.authorships : [];
   const firstAuthorship = object(authorships[0]);
@@ -230,6 +250,15 @@ function readOpenAlexCandidate(value: unknown): Candidate | null {
   };
 }
 
+function readOpenAlexCandidates(value: unknown) {
+  const root = object(value);
+  const results = root && Array.isArray(root.results) ? root.results : [];
+  return results.flatMap((_item, index) => {
+    const candidate = readOpenAlexCandidate(value, index);
+    return candidate ? [candidate] : [];
+  });
+}
+
 async function fetchJson(url: URL, headers: HeadersInit) {
   try {
     const response = await fetch(url, { headers, signal: AbortSignal.timeout(12_000) });
@@ -248,29 +277,41 @@ function crossrefHeaders() {
   };
 }
 
-async function findCandidate(reference: ParsedReference) {
+function candidateKey(candidate: Candidate) {
+  return candidate.metadata.doi
+    ? `doi:${candidate.metadata.doi}`
+    : candidate.id
+      ? `${candidate.provider}:${candidate.id}`
+      : `${candidate.provider}:${normalise(candidate.metadata.title)}:${candidate.metadata.publicationYear ?? ""}`;
+}
+
+function distinctCandidates(candidates: Candidate[]) {
+  return [...new Map(candidates.map((candidate) => [candidateKey(candidate), candidate])).values()];
+}
+
+async function findCandidates(reference: ParsedReference) {
   const headers = crossrefHeaders();
+  const candidates: Candidate[] = [];
   if (reference.doi) {
     const doiUrl = new URL(`https://api.crossref.org/works/${encodeURIComponent(reference.doi)}`);
     const byDoi = readCrossrefCandidate(await fetchJson(doiUrl, headers), "doi");
-    if (byDoi) return byDoi;
+    if (byDoi) candidates.push(byDoi);
   }
 
   const bibliographicUrl = new URL("https://api.crossref.org/works");
   bibliographicUrl.searchParams.set("query.bibliographic", reference.rawReference.slice(0, 1_200));
-  bibliographicUrl.searchParams.set("rows", "1");
+  bibliographicUrl.searchParams.set("rows", "5");
   const result = await fetchJson(bibliographicUrl, headers);
-  const root = object(result);
-  const message = root ? object(root.message) : null;
-  const items = message && Array.isArray(message.items) ? message.items : [];
-  const byBibliographic = readCrossrefCandidate({ message: items[0] }, "bibliographic");
-  if (byBibliographic) return byBibliographic;
+  candidates.push(...readCrossrefCandidates(result, "bibliographic"));
 
-  if (!reference.title) return null;
-  const openAlexUrl = new URL("https://api.openalex.org/works");
-  openAlexUrl.searchParams.set("search.exact", reference.title.slice(0, 500));
-  openAlexUrl.searchParams.set("per-page", "1");
-  return readOpenAlexCandidate(await fetchJson(openAlexUrl, { Accept: "application/json" }));
+  if (reference.title) {
+    const openAlexUrl = new URL("https://api.openalex.org/works");
+    openAlexUrl.searchParams.set("search.exact", reference.title.slice(0, 500));
+    openAlexUrl.searchParams.set("per-page", "5");
+    candidates.push(...readOpenAlexCandidates(await fetchJson(openAlexUrl, { Accept: "application/json" })));
+  }
+
+  return distinctCandidates(candidates);
 }
 
 function fingerprint(reference: ParsedReference) {
@@ -295,40 +336,96 @@ function scoreCandidate(reference: ParsedReference, candidate: Candidate | null)
   return { authorMatch, confidence, doiMatch, titleSimilarity, yearMatch };
 }
 
-async function verifyReference(reference: ParsedReference): Promise<ReferenceVerification> {
-  const candidate = await findCandidate(reference);
-  const score = scoreCandidate(reference, candidate);
-  let status: VerificationStatus;
-  let statusReason: string;
+function matchesRequiredReferenceFields(score: ReturnType<typeof scoreCandidate>, reference: ParsedReference) {
+  return (!reference.title || score.titleSimilarity >= 0.72)
+    && (!reference.firstAuthor || score.authorMatch === true)
+    && (!reference.publicationYear || score.yearMatch === true);
+}
 
-  if (!candidate) {
-    status = reference.doi ? "invalid_doi" : "unlocatable";
-    statusReason = reference.doi
-      ? "The supplied DOI did not resolve through the approved metadata providers."
-      : "No sufficiently specific bibliographic record was found through the approved metadata providers.";
-  } else if (reference.doi && candidate.metadata.doi && score.doiMatch === false) {
-    status = "invalid_doi";
-    statusReason = "The supplied DOI identifies a different work than the supplied reference details.";
-  } else if (score.confidence >= 0.86) {
-    status = "verified";
-    statusReason = "The supplied reference matches live bibliographic metadata.";
-  } else if (score.confidence >= 0.7) {
-    status = "verified_with_minor_metadata_difference";
-    statusReason = "A likely live record was found, but one or more bibliographic details differ and need an editor check.";
-  } else {
-    status = "ambiguous_match";
-    statusReason = "A possible record was found, but the metadata match is not strong enough to correct automatically.";
+function isStrictMatch(reference: ParsedReference, score: ReturnType<typeof scoreCandidate>) {
+  if (reference.doi) return score.doiMatch === true && matchesRequiredReferenceFields(score, reference);
+  return score.confidence >= 0.9
+    && score.titleSimilarity >= 0.9
+    && score.authorMatch === true
+    && score.yearMatch === true;
+}
+
+export function assessReferenceCandidates(reference: ParsedReference, candidates: Candidate[]): CandidateAssessment {
+  const scored = distinctCandidates(candidates)
+    .map((candidate) => ({ candidate, score: scoreCandidate(reference, candidate) }))
+    .sort((left, right) => right.score.confidence - left.score.confidence);
+  const best = scored[0];
+  const runnerUp = scored[1];
+  const matchedFields = best
+    ? {
+      author: best.score.authorMatch,
+      doi: best.score.doiMatch,
+      titleSimilarity: Number(best.score.titleSimilarity.toFixed(3)),
+      year: best.score.yearMatch,
+      candidateCount: scored.length,
+      runnerUpConfidence: runnerUp ? Number(runnerUp.score.confidence.toFixed(3)) : null,
+    }
+    : { author: null, doi: null, titleSimilarity: 0, year: null, candidateCount: 0, runnerUpConfidence: null };
+  const confidence = best ? Number(best.score.confidence.toFixed(3)) : 0;
+  const unique = Boolean(best && (!runnerUp || best.score.confidence - runnerUp.score.confidence >= 0.08));
+
+  if (!best) {
+    return {
+      candidate: null,
+      candidateCount: 0,
+      confidence,
+      matchedFields,
+      runnerUpConfidence: null,
+      status: reference.doi ? "invalid_doi" : "unlocatable",
+      statusReason: reference.doi
+        ? "The supplied DOI did not resolve through the approved metadata providers."
+        : "No sufficiently specific bibliographic record was found through the approved metadata providers.",
+    };
+  }
+  if (reference.doi && best.score.doiMatch === false) {
+    return {
+      candidate: best.candidate,
+      candidateCount: scored.length,
+      confidence,
+      matchedFields,
+      runnerUpConfidence: runnerUp ? Number(runnerUp.score.confidence.toFixed(3)) : null,
+      status: "invalid_doi",
+      statusReason: "The supplied DOI identifies a different work than the supplied reference details.",
+    };
+  }
+  if (isStrictMatch(reference, best.score) && unique) {
+    return {
+      candidate: best.candidate,
+      candidateCount: scored.length,
+      confidence,
+      matchedFields,
+      runnerUpConfidence: runnerUp ? Number(runnerUp.score.confidence.toFixed(3)) : null,
+      status: "verified",
+      statusReason: "A uniquely identified live record matches the supplied reference metadata. No bibliographic replacement was made.",
+    };
   }
 
   return {
-    confidence: Number(score.confidence.toFixed(3)),
+    candidate: best.candidate,
+    candidateCount: scored.length,
+    confidence,
+    matchedFields,
+    runnerUpConfidence: runnerUp ? Number(runnerUp.score.confidence.toFixed(3)) : null,
+    status: "ambiguous_match",
+    statusReason: unique
+      ? "A possible live record was found, but it does not meet PenPal's strict metadata-match threshold; no bibliographic replacement was made."
+      : "More than one live record is similarly plausible, so this reference requires manual review; no bibliographic replacement was made.",
+  };
+}
+
+async function verifyReference(reference: ParsedReference): Promise<ReferenceVerification> {
+  const assessment = assessReferenceCandidates(reference, await findCandidates(reference));
+  const candidate = assessment.candidate;
+
+  return {
+    confidence: assessment.confidence,
     lookupType: candidate?.lookupType ?? (reference.doi ? "doi" : "bibliographic"),
-    matchedFields: {
-      author: score.authorMatch,
-      doi: score.doiMatch,
-      titleSimilarity: Number(score.titleSimilarity.toFixed(3)),
-      year: score.yearMatch,
-    },
+    matchedFields: assessment.matchedFields,
     provider: candidate?.provider ?? "crossref",
     providerUrl: candidate?.providerUrl ?? null,
     providerWorkId: candidate?.id ?? null,
@@ -341,8 +438,8 @@ async function verifyReference(reference: ParsedReference): Promise<ReferenceVer
     },
     referenceOrder: reference.order,
     requestFingerprint: fingerprint(reference),
-    status,
-    statusReason,
+    status: assessment.status,
+    statusReason: assessment.statusReason,
   };
 }
 
