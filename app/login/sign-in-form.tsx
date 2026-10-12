@@ -7,6 +7,7 @@ export function SignInForm() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -27,6 +28,22 @@ export function SignInForm() {
     );
   }
 
+  async function handleGoogleSignIn() {
+    setIsGoogleSigningIn(true);
+    setMessage(null);
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/auth/confirm` },
+    });
+
+    if (error) {
+      setMessage("Google sign-in is not available yet. Please use the secure sign-in link for now.");
+      setIsGoogleSigningIn(false);
+    }
+  }
+
   return (
     <form className="sign-in-form" onSubmit={handleSubmit}>
       <label htmlFor="email">Email address</label>
@@ -42,6 +59,10 @@ export function SignInForm() {
       />
       <button className="button button-primary" disabled={isSubmitting} type="submit">
         {isSubmitting ? "Sending sign-in link…" : "Send secure sign-in link"}
+      </button>
+      <div className="sign-in-divider" aria-hidden="true"><span />or<span /></div>
+      <button className="button button-secondary" disabled={isGoogleSigningIn || isSubmitting} onClick={handleGoogleSignIn} type="button">
+        {isGoogleSigningIn ? "Opening Google…" : "Continue with Google"}
       </button>
       {message ? <p className="form-message" role="status">{message}</p> : null}
     </form>
