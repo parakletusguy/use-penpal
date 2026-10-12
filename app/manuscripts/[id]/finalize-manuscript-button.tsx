@@ -20,10 +20,11 @@ export function FinalizeManuscriptButton({ manuscriptId }: { manuscriptId: numbe
       setIsRunning(false);
       return;
     }
-    const data = body as { applied?: number; authorQueries?: number; skipped?: number };
+    const data = body as { applied?: number; authorQueries?: number; recheckAttentionCount?: number; skipped?: number };
     const skipped = data.skipped ? ` ${data.skipped} proposal${data.skipped === 1 ? " needs" : "s need"} attention.` : "";
     const queries = data.authorQueries ? ` ${data.authorQueries} author quer${data.authorQueries === 1 ? "y remains" : "ies remain"} in the review report.` : "";
-    setMessage(`Revised Word copy ready with ${data.applied ?? 0} applied edit${data.applied === 1 ? "" : "s"}.${queries}${skipped}`);
+    const recheck = data.recheckAttentionCount ? ` Post-revision formatting checks raised ${data.recheckAttentionCount} item${data.recheckAttentionCount === 1 ? "" : "s"} for review in the editorial record.` : "";
+    setMessage(`Revised Word copy ready with ${data.applied ?? 0} applied edit${data.applied === 1 ? "" : "s"}.${queries}${skipped}${recheck}`);
     setIsRunning(false);
     router.refresh();
   }

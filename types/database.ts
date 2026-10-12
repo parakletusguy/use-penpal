@@ -55,6 +55,129 @@ export type Database = {
           },
         ]
       }
+      citation_occurrences: {
+        Row: {
+          cited_author: string | null
+          cited_year: number | null
+          citation_text: string
+          created_at: string
+          editor_id: string
+          id: number
+          manuscript_id: number
+          reconciliation_status: string
+          reference_id: number | null
+          run_id: number
+          source_locator: Json
+        }
+        Insert: {
+          cited_author?: string | null
+          cited_year?: number | null
+          citation_text: string
+          created_at?: string
+          editor_id: string
+          id?: number
+          manuscript_id: number
+          reconciliation_status: string
+          reference_id?: number | null
+          run_id: number
+          source_locator?: Json
+        }
+        Update: {
+          cited_author?: string | null
+          cited_year?: number | null
+          citation_text?: string
+          created_at?: string
+          editor_id?: string
+          id?: number
+          manuscript_id?: number
+          reconciliation_status?: string
+          reference_id?: number | null
+          run_id?: number
+          source_locator?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "citation_occurrences_manuscript_editor_fkey"
+            columns: ["manuscript_id", "editor_id"]
+            isOneToOne: false
+            referencedRelation: "manuscripts"
+            referencedColumns: ["id", "editor_id"]
+          },
+          {
+            foreignKeyName: "citation_occurrences_reference_editor_fkey"
+            columns: ["reference_id", "editor_id"]
+            isOneToOne: false
+            referencedRelation: "reference_records"
+            referencedColumns: ["id", "editor_id"]
+          },
+          {
+            foreignKeyName: "citation_occurrences_run_editor_fkey"
+            columns: ["run_id", "editor_id"]
+            isOneToOne: false
+            referencedRelation: "citation_verification_runs"
+            referencedColumns: ["id", "editor_id"]
+          },
+        ]
+      }
+      citation_verification_runs: {
+        Row: {
+          attention_reference_count: number
+          citation_count: number
+          completed_at: string | null
+          created_at: string
+          editor_id: string
+          error_summary: string | null
+          id: number
+          manuscript_id: number
+          profile_version: string
+          reference_count: number
+          run_status: string
+          source_checksum: string | null
+          updated_at: string
+          verified_reference_count: number
+        }
+        Insert: {
+          attention_reference_count?: number
+          citation_count?: number
+          completed_at?: string | null
+          created_at?: string
+          editor_id: string
+          error_summary?: string | null
+          id?: number
+          manuscript_id: number
+          profile_version?: string
+          reference_count?: number
+          run_status?: string
+          source_checksum?: string | null
+          updated_at?: string
+          verified_reference_count?: number
+        }
+        Update: {
+          attention_reference_count?: number
+          citation_count?: number
+          completed_at?: string | null
+          created_at?: string
+          editor_id?: string
+          error_summary?: string | null
+          id?: number
+          manuscript_id?: number
+          profile_version?: string
+          reference_count?: number
+          run_status?: string
+          source_checksum?: string | null
+          updated_at?: string
+          verified_reference_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "citation_verification_runs_manuscript_editor_fkey"
+            columns: ["manuscript_id", "editor_id"]
+            isOneToOne: false
+            referencedRelation: "manuscripts"
+            referencedColumns: ["id", "editor_id"]
+          },
+        ]
+      }
       document_artifacts: {
         Row: {
           artifact_type: string
@@ -65,6 +188,10 @@ export type Database = {
           created_by: string | null
           display_name: string
           editor_id: string
+          external_file_id: string | null
+          external_provider: string | null
+          external_url: string | null
+          externally_delivered_at: string | null
           generated_from_version: number | null
           id: number
           manuscript_id: number
@@ -79,6 +206,10 @@ export type Database = {
           created_by?: string | null
           display_name: string
           editor_id: string
+          external_file_id?: string | null
+          external_provider?: string | null
+          external_url?: string | null
+          externally_delivered_at?: string | null
           generated_from_version?: number | null
           id?: number
           manuscript_id: number
@@ -93,6 +224,10 @@ export type Database = {
           created_by?: string | null
           display_name?: string
           editor_id?: string
+          external_file_id?: string | null
+          external_provider?: string | null
+          external_url?: string | null
+          externally_delivered_at?: string | null
           generated_from_version?: number | null
           id?: number
           manuscript_id?: number
@@ -416,6 +551,157 @@ export type Database = {
             columns: ["manuscript_id", "editor_id"]
             isOneToOne: false
             referencedRelation: "manuscripts"
+            referencedColumns: ["id", "editor_id"]
+          },
+        ]
+      }
+      reference_records: {
+        Row: {
+          citation_count: number
+          created_at: string
+          doi: string | null
+          editor_id: string
+          first_author: string | null
+          id: number
+          manuscript_id: number
+          parsed_metadata: Json
+          publication_year: number | null
+          raw_reference: string
+          reference_order: number
+          run_id: number
+          source_locator: Json
+          title: string | null
+          updated_at: string
+          verification_reason: string | null
+          verification_status: string
+        }
+        Insert: {
+          citation_count?: number
+          created_at?: string
+          doi?: string | null
+          editor_id: string
+          first_author?: string | null
+          id?: number
+          manuscript_id: number
+          parsed_metadata?: Json
+          publication_year?: number | null
+          raw_reference: string
+          reference_order: number
+          run_id: number
+          source_locator?: Json
+          title?: string | null
+          updated_at?: string
+          verification_reason?: string | null
+          verification_status?: string
+        }
+        Update: {
+          citation_count?: number
+          created_at?: string
+          doi?: string | null
+          editor_id?: string
+          first_author?: string | null
+          id?: number
+          manuscript_id?: number
+          parsed_metadata?: Json
+          publication_year?: number | null
+          raw_reference?: string
+          reference_order?: number
+          run_id?: number
+          source_locator?: Json
+          title?: string | null
+          updated_at?: string
+          verification_reason?: string | null
+          verification_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reference_records_manuscript_editor_fkey"
+            columns: ["manuscript_id", "editor_id"]
+            isOneToOne: false
+            referencedRelation: "manuscripts"
+            referencedColumns: ["id", "editor_id"]
+          },
+          {
+            foreignKeyName: "reference_records_run_editor_fkey"
+            columns: ["run_id", "editor_id"]
+            isOneToOne: false
+            referencedRelation: "citation_verification_runs"
+            referencedColumns: ["id", "editor_id"]
+          },
+        ]
+      }
+      reference_verifications: {
+        Row: {
+          checked_at: string
+          confidence: number
+          editor_id: string
+          id: number
+          lookup_type: string
+          manuscript_id: number
+          matched_fields: Json
+          provider: string
+          provider_url: string | null
+          provider_work_id: string | null
+          received_metadata: Json
+          reference_id: number
+          request_fingerprint: string
+          run_id: number
+          verification_status: string
+        }
+        Insert: {
+          checked_at?: string
+          confidence: number
+          editor_id: string
+          id?: number
+          lookup_type: string
+          manuscript_id: number
+          matched_fields?: Json
+          provider: string
+          provider_url?: string | null
+          provider_work_id?: string | null
+          received_metadata?: Json
+          reference_id: number
+          request_fingerprint: string
+          run_id: number
+          verification_status: string
+        }
+        Update: {
+          checked_at?: string
+          confidence?: number
+          editor_id?: string
+          id?: number
+          lookup_type?: string
+          manuscript_id?: number
+          matched_fields?: Json
+          provider?: string
+          provider_url?: string | null
+          provider_work_id?: string | null
+          received_metadata?: Json
+          reference_id?: number
+          request_fingerprint?: string
+          run_id?: number
+          verification_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reference_verifications_manuscript_editor_fkey"
+            columns: ["manuscript_id", "editor_id"]
+            isOneToOne: false
+            referencedRelation: "manuscripts"
+            referencedColumns: ["id", "editor_id"]
+          },
+          {
+            foreignKeyName: "reference_verifications_reference_editor_fkey"
+            columns: ["reference_id", "editor_id"]
+            isOneToOne: false
+            referencedRelation: "reference_records"
+            referencedColumns: ["id", "editor_id"]
+          },
+          {
+            foreignKeyName: "reference_verifications_run_editor_fkey"
+            columns: ["run_id", "editor_id"]
+            isOneToOne: false
+            referencedRelation: "citation_verification_runs"
             referencedColumns: ["id", "editor_id"]
           },
         ]

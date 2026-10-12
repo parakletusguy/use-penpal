@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
+import { recordAuditEvent } from "@/lib/audit";
 import { createRevisedDocument, revisedFileName } from "@/lib/docx/revise-manuscript";
+import { verifyRevisedDocument } from "@/lib/docx/verify-revised-document";
 import { createClient } from "@/utils/supabase/server";
 
 const WORD_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -59,29 +61,18 @@ export async function POST(
     });
   }
 
-  const decidedAt = new Date().toISOString();
-  const standardDecision = await supabase
+  const { count: undecidedCount, error: undecidedError } = await supabase
     .from("edit_suggestions")
-    .update({ decided_at: decidedAt, decided_by: editorId, suggestion_status: "approved" })
+    .select("id", { count: "exact", head: true })
     .eq("manuscript_id", manuscriptId)
     .eq("editor_id", editorId)
-    .eq("suggestion_status", "proposed")
-    .neq("suggestion_type", "author_query");
-  if (standardDecision.error) return NextResponse.json({ error: "PenPal could not record the editorial decisions." }, { status: 422 });
-
-  const queryDecision = await supabase
-    .from("edit_suggestions")
-    .update({
-      decided_at: decidedAt,
-      decided_by: editorId,
-      decision_note: "Accepted as an editorial query. It remains in the review report and is not inserted as manuscript text.",
-      suggestion_status: "approved",
-    })
-    .eq("manuscript_id", manuscriptId)
-    .eq("editor_id", editorId)
-    .eq("suggestion_status", "proposed")
-    .eq("suggestion_type", "author_query");
-  if (queryDecision.error) return NextResponse.json({ error: "PenPal could not record the author queries." }, { status: 422 });
+    .eq("suggestion_status", "proposed");
+  if (undecidedError) return NextResponse.json({ error: "PenPal could not confirm the editorial decisions." }, { status: 422 });
+  if (undecidedCount) {
+    return NextResponse.json({
+      error: `Record an approval or rejection for the remaining ${undecidedCount} proposed item${undecidedCount === 1 ? "" : "s"} before creating a revised copy.`,
+    }, { status: 409 });
+  }
 
   const { data: approvedSuggestions, error: suggestionsError } = await supabase
     .from("edit_suggestions")
@@ -107,6 +98,11 @@ export async function POST(
     revision = await createRevisedDocument(Buffer.from(await sourceFile.arrayBuffer()), mechanicalEdits);
   } catch {
     return NextResponse.json({ error: "PenPal could not create a safe revised Word copy." }, { status: 422 });
+  }
+
+  const revisionValidation = await verifyRevisedDocument(revision, mechanicalEdits).catch(() => null);
+  if (!revisionValidation || revisionValidation.unconfirmedSuggestionIds.length) {
+    return NextResponse.json({ error: "PenPal could not confirm every applied edit in the revised Word copy. No output was saved." }, { status: 422 });
   }
 
   const nextVersion = manuscript.current_edit_version + 1;
@@ -148,10 +144,39 @@ export async function POST(
     .eq("editor_id", editorId);
   if (manuscriptUpdateError) return NextResponse.json({ error: "The revised copy is ready, but PenPal could not complete its workflow record." }, { status: 422 });
 
+  await recordAuditEvent(supabase, {
+    editorId,
+    entityId: manuscriptId,
+    entityType: "document_artifact",
+    eventData: {
+      appliedEditCount: revision.appliedSuggestionIds.length,
+      authorQueryCount: authorQueries.length,
+      generatedFromVersion: nextVersion,
+      postRevisionStructureFindingCount: revisionValidation.structureFindingCount,
+      skippedEditCount: revision.skippedEdits.length,
+      storagePath,
+    },
+    eventType: "revised_manuscript_created",
+    manuscriptId,
+  });
+  await recordAuditEvent(supabase, {
+    editorId,
+    entityId: manuscriptId,
+    entityType: "revised_document_validation",
+    eventData: {
+      confirmedAppliedEditCount: revision.appliedSuggestionIds.length,
+      structureFindingCount: revisionValidation.structureFindingCount,
+      unconfirmedSuggestionIds: revisionValidation.unconfirmedSuggestionIds,
+    },
+    eventType: "revised_manuscript_validated",
+    manuscriptId,
+  });
+
   return NextResponse.json({
     applied: revision.appliedSuggestionIds.length,
     authorQueries: authorQueries.length,
     revisedName,
+    recheckAttentionCount: revisionValidation.structureFindingCount,
     skipped: revision.skippedEdits.length,
     skippedEdits: revision.skippedEdits,
   }, { status: 201 });

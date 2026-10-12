@@ -36,7 +36,7 @@ export function FinalizeBatchButton({ manuscripts }: FinalizeBatchButtonProps) {
     let completed = 0;
 
     for (const [index, manuscript] of queue.entries()) {
-      setProgress(`Applying approved edits to paper ${index + 1} of ${queue.length}: ${displayTitle(manuscript)}…`);
+      setProgress(`Creating a revised copy from approved edits for paper ${index + 1} of ${queue.length}: ${displayTitle(manuscript)}…`);
       const response = await fetch(`/api/manuscripts/${manuscript.id}/finalize`, { method: "POST" });
       if (response.ok) completed += 1;
       else attention.push(displayTitle(manuscript));
@@ -53,15 +53,15 @@ export function FinalizeBatchButton({ manuscripts }: FinalizeBatchButtonProps) {
   if (!queue.length) return null;
 
   return (
-    <section className="batch-finalise-card" aria-label="Apply proposed edits">
+    <section className="batch-finalise-card" aria-label="Create revised Word copies">
       <div>
         <p className="eyebrow">Batch finalisation</p>
-        <h2>Apply all proposed edits and create revised Word copies</h2>
-        <p>PenPal will approve the remaining narrow edits, apply grammar, clarity, formatting, citation, and consistency changes, then create a separate revised .docx for every paper. Author queries stay in the report because they require an author response, not automatic text.</p>
+        <h2>Create revised Word copies from editor-approved edits</h2>
+        <p>PenPal only applies decisions you have already approved. Papers with proposed items are left for your review; author queries stay in the report because they require an author response, not replacement text.</p>
       </div>
       <div className="batch-review-actions">
         <button className="button button-primary" disabled={isRunning} onClick={finaliseBatch} type="button">
-          {isRunning ? "Creating revised copies…" : `Apply edits to ${queue.length} paper${queue.length === 1 ? "" : "s"}`}
+          {isRunning ? "Creating revised copies…" : `Create copies for ${queue.length} paper${queue.length === 1 ? "" : "s"}`}
         </button>
         {progress ? <p role="status">{progress}</p> : null}
         {summary ? <p className="form-message success" role="status">{summary}</p> : null}

@@ -27,13 +27,13 @@ export type EditorialReview = {
 
 const editorialInstructions = `You are PenPal, an editorial assistant for an academic journal editor. Analyse only the manuscript text supplied by the editor.
 
-Your task is limited to technical and editorial preparation: document structure, language, clarity, consistency, citation/reference matching, metadata and ethical disclosure checks. Do not claim that a paper will be accepted, score publication quality, assess scientific novelty, conduct peer review, invent sources, rewrite substantive findings, or alter facts, data, methods, results, or citations.
+Your task is limited to technical and editorial preparation: document structure, language, clarity, consistency, metadata and ethical disclosure checks. Do not claim that a paper will be accepted, score publication quality, assess scientific novelty, conduct peer review, invent sources, rewrite substantive findings, or alter facts, data, methods, results, or citations. Do not propose a replacement citation or reference. If a citation or reference appears incomplete, inconsistent, or potentially invalid, create an author_query that directs the editor to run PenPal's separate citation verification and obtain an author response.
 
 Every finding must quote an exact evidence excerpt copied from the manuscript. Every edit suggestion must use an exact originalText copied from the manuscript and make a narrow grammar, clarity, formatting, citation, consistency, or author-query change. If a substantive change is needed, use an author_query rather than supplying replacement prose. Keep the review concise, prioritised, and actionable.`;
 
 const findingTypes = new Set<FindingType>(["citation", "ethical", "formatting", "language", "metadata", "technical"]);
 const severities = new Set<Severity>(["blocking", "high", "info", "warning"]);
-const suggestionTypes = new Set<SuggestionType>(["author_query", "citation", "clarity", "consistency", "formatting", "grammar"]);
+const editableSuggestionTypes = new Set<SuggestionType>(["author_query", "clarity", "consistency", "formatting", "grammar"]);
 
 const responseSchema = {
   type: "object",
@@ -63,7 +63,7 @@ const responseSchema = {
         type: "object",
         additionalProperties: false,
         properties: {
-          suggestionType: { type: "string", enum: [...suggestionTypes] },
+          suggestionType: { type: "string", enum: [...editableSuggestionTypes] },
           originalText: { type: "string" },
           proposedText: { type: "string" },
           rationale: { type: "string" },
@@ -109,7 +109,7 @@ function parseSuggestion(value: unknown, manuscriptText: string): EditorialSugge
   const rationale = stringValue(item.rationale, 1_500);
 
   if (
-    typeof suggestionType !== "string" || !suggestionTypes.has(suggestionType as SuggestionType) ||
+    typeof suggestionType !== "string" || !editableSuggestionTypes.has(suggestionType as SuggestionType) ||
     !originalText || !proposedText || !rationale || originalText === proposedText || !manuscriptText.includes(originalText)
   ) return null;
 

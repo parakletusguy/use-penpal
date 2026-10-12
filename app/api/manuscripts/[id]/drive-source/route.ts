@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
+import { recordAuditEvent } from "@/lib/audit";
 import { createClient } from "@/utils/supabase/server";
 
 const WORD_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -39,6 +41,7 @@ export async function POST(
     .from("manuscripts")
     .select("id, source_file_id, source_file_name, original_storage_path")
     .eq("id", manuscriptId)
+    .eq("editor_id", editorId)
     .maybeSingle();
   if (manuscriptError || !manuscript) return NextResponse.json({ error: "Manuscript not found." }, { status: 404 });
   if (manuscript.original_storage_path) return NextResponse.json({ ready: true, reused: true });
@@ -78,6 +81,7 @@ export async function POST(
   const { error: artifactError } = await supabase.from("document_artifacts").insert({
     artifact_type: "original",
     byte_size: sourceBuffer.byteLength,
+    checksum: createHash("sha256").update(Buffer.from(sourceBuffer)).digest("hex"),
     content_type: WORD_MIME,
     created_by: editorId,
     display_name: manuscript.source_file_name.slice(0, 500),
@@ -89,9 +93,23 @@ export async function POST(
 
   const { error: updateError } = await supabase
     .from("manuscripts")
-    .update({ original_storage_path: storagePath, workflow_status: "ready_to_review" })
-    .eq("id", manuscriptId);
+    .update({
+      original_storage_path: storagePath,
+      source_checksum: createHash("sha256").update(Buffer.from(sourceBuffer)).digest("hex"),
+      workflow_status: "ready_to_review",
+    })
+    .eq("id", manuscriptId)
+    .eq("editor_id", editorId);
   if (updateError) return NextResponse.json({ error: "PenPal could not prepare this manuscript." }, { status: 422 });
+
+  await recordAuditEvent(supabase, {
+    editorId,
+    entityId: manuscriptId,
+    entityType: "source_document",
+    eventData: { byteSize: sourceBuffer.byteLength, source: "drive_shared_file" },
+    eventType: "private_source_registered",
+    manuscriptId,
+  });
 
   return NextResponse.json({ ready: true }, { status: 201 });
 }
