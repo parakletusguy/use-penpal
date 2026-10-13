@@ -20,16 +20,17 @@ export function BatchReferenceVerificationButton({ manuscripts }: { manuscripts:
   const [progress, setProgress] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const queue = manuscripts.filter((manuscript) => manuscript.originalStoragePath && !manuscript.hasCitationRun);
+  const refreshQueue = manuscripts.filter((manuscript) => manuscript.originalStoragePath);
 
-  async function verifyBatch() {
-    if (!queue.length) return;
+  async function verifyBatch(targets: ManuscriptForVerification[]) {
+    if (!targets.length) return;
     setIsRunning(true);
     setSummary(null);
     const attention: string[] = [];
     let completed = 0;
 
-    for (const [index, manuscript] of queue.entries()) {
-      setProgress(`Verifying references for paper ${index + 1} of ${queue.length}: ${displayTitle(manuscript)}…`);
+    for (const [index, manuscript] of targets.entries()) {
+      setProgress(`Verifying references for paper ${index + 1} of ${targets.length}: ${displayTitle(manuscript)}…`);
       const response = await fetch(`/api/manuscripts/${manuscript.id}/verify-references`, { method: "POST" });
       if (response.ok) completed += 1;
       else attention.push(displayTitle(manuscript));
@@ -43,18 +44,21 @@ export function BatchReferenceVerificationButton({ manuscripts }: { manuscripts:
     router.refresh();
   }
 
-  if (!queue.length) return null;
+  if (!refreshQueue.length) return null;
 
   return (
     <section className="batch-reference-card" aria-label="Batch reference verification">
       <div>
         <p className="eyebrow">Batch reference verification</p>
-        <h2>Verify sources for {queue.length} paper{queue.length === 1 ? "" : "s"}</h2>
-        <p>PenPal checks bibliographic metadata and in-text citation links one paper at a time. It does not alter references or manuscript claims.</p>
+        <h2>{queue.length ? `Verify sources for ${queue.length} paper${queue.length === 1 ? "" : "s"}` : `Refresh source checks for ${refreshQueue.length} paper${refreshQueue.length === 1 ? "" : "s"}`}</h2>
+        <p>PenPal checks bibliographic metadata and in-text citation links one paper at a time. Refreshing creates a newer verification record after parser or metadata-source improvements; it does not alter references or manuscript claims.</p>
       </div>
       <div className="batch-review-actions">
-        <button className="button button-primary" disabled={isRunning} onClick={verifyBatch} type="button">
+        {queue.length ? <button className="button button-primary" disabled={isRunning} onClick={() => verifyBatch(queue)} type="button">
           {isRunning ? "Verifying references…" : `Verify ${queue.length} paper${queue.length === 1 ? "" : "s"}`}
+        </button> : null}
+        <button className={queue.length ? "button button-secondary" : "button button-primary"} disabled={isRunning} onClick={() => verifyBatch(refreshQueue)} type="button">
+          {isRunning ? "Verifying references…" : `Refresh all ${refreshQueue.length} paper${refreshQueue.length === 1 ? "" : "s"}`}
         </button>
         {progress ? <p role="status">{progress}</p> : null}
         {summary ? <p className="form-message" role="status">{summary}</p> : null}
