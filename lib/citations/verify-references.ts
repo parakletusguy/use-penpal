@@ -368,6 +368,13 @@ export async function findReferenceCandidates(reference: ParsedReference) {
   candidates.push(...readCrossrefCandidates(result, "bibliographic"));
 
   if (reference.title) {
+    // Search the title independently of the raw entry. A mistyped DOI can otherwise
+    // dominate a bibliographic query and hide the work that the author actually named.
+    const crossrefTitleUrl = new URL("https://api.crossref.org/works");
+    crossrefTitleUrl.searchParams.set("query.title", reference.title.slice(0, 500));
+    crossrefTitleUrl.searchParams.set("rows", "5");
+    candidates.push(...readCrossrefCandidates(await fetchJson(crossrefTitleUrl, headers), "title"));
+
     const openAlexUrl = new URL("https://api.openalex.org/works");
     openAlexUrl.searchParams.set("search.exact", reference.title.slice(0, 500));
     openAlexUrl.searchParams.set("per-page", "5");

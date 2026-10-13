@@ -32,7 +32,8 @@ export function BatchCitationProposalsButton({ manuscripts }: { manuscripts: Man
         const result = await response.json().catch(() => null) as { created?: number; reused?: boolean } | null;
         if (!response.ok) attention.push(title(manuscript));
         else if (result?.reused) reusable += 1;
-        else created += result?.created ?? 0;
+        else if (result?.created) created += result.created;
+        else attention.push(title(manuscript));
       } catch {
         attention.push(title(manuscript));
       }
