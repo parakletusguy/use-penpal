@@ -289,7 +289,7 @@ function distinctCandidates(candidates: Candidate[]) {
   return [...new Map(candidates.map((candidate) => [candidateKey(candidate), candidate])).values()];
 }
 
-async function findCandidates(reference: ParsedReference) {
+export async function findReferenceCandidates(reference: ParsedReference) {
   const headers = crossrefHeaders();
   const candidates: Candidate[] = [];
   if (reference.doi) {
@@ -336,6 +336,22 @@ function scoreCandidate(reference: ParsedReference, candidate: Candidate | null)
   return { authorMatch, confidence, doiMatch, titleSimilarity, yearMatch };
 }
 
+export type RankedCandidate = Candidate & {
+  score: {
+    authorMatch: boolean | null;
+    confidence: number;
+    doiMatch: boolean | null;
+    titleSimilarity: number;
+    yearMatch: boolean | null;
+  };
+};
+
+export function rankReferenceCandidates(reference: ParsedReference, candidates: Candidate[]): RankedCandidate[] {
+  return distinctCandidates(candidates)
+    .map((candidate) => ({ ...candidate, score: scoreCandidate(reference, candidate) }))
+    .sort((left, right) => right.score.confidence - left.score.confidence);
+}
+
 function matchesRequiredReferenceFields(score: ReturnType<typeof scoreCandidate>, reference: ParsedReference) {
   return (!reference.title || score.titleSimilarity >= 0.72)
     && (!reference.firstAuthor || score.authorMatch === true)
@@ -351,9 +367,7 @@ function isStrictMatch(reference: ParsedReference, score: ReturnType<typeof scor
 }
 
 export function assessReferenceCandidates(reference: ParsedReference, candidates: Candidate[]): CandidateAssessment {
-  const scored = distinctCandidates(candidates)
-    .map((candidate) => ({ candidate, score: scoreCandidate(reference, candidate) }))
-    .sort((left, right) => right.score.confidence - left.score.confidence);
+  const scored = rankReferenceCandidates(reference, candidates).map((candidate) => ({ candidate, score: candidate.score }));
   const best = scored[0];
   const runnerUp = scored[1];
   const matchedFields = best
@@ -419,7 +433,7 @@ export function assessReferenceCandidates(reference: ParsedReference, candidates
 }
 
 async function verifyReference(reference: ParsedReference): Promise<ReferenceVerification> {
-  const assessment = assessReferenceCandidates(reference, await findCandidates(reference));
+  const assessment = assessReferenceCandidates(reference, await findReferenceCandidates(reference));
   const candidate = assessment.candidate;
 
   return {

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { BrandName } from "@/components/brand-name";
 import { decideSuggestion } from "@/app/manuscripts/[id]/actions";
 import { FinalizeManuscriptButton } from "@/app/manuscripts/[id]/finalize-manuscript-button";
+import { GenerateCitationProposalsButton } from "@/app/manuscripts/[id]/generate-citation-proposals-button";
 import { RunAnalysisButton } from "@/app/manuscripts/[id]/run-analysis-button";
 import { SourceUpload } from "@/app/manuscripts/[id]/source-upload";
 import { UploadRevisedToDriveButton } from "@/app/manuscripts/[id]/upload-revised-to-drive-button";
@@ -104,7 +105,8 @@ export default async function ManuscriptPage({ params }: { params: Promise<{ id:
 
       {citationRun ? <section className="citation-results" aria-label="Reference verification results">
         <div className="section-heading"><div><p className="eyebrow">Reference evidence</p><h2>{citationRun.run_status === "failed" ? "Verification needs to be rerun" : `${citationRun.reference_count} parsed references`}</h2></div><span>{unmatchedCitationCount ? `${unmatchedCitationCount} in-text citation${unmatchedCitationCount === 1 ? "" : "s"} need reconciliation` : "In-text citations reconciled where identifiable"}</span></div>
-        <div className="citation-remediation-action"><div><h3>Turn this into author queries</h3><p>Download an exact worklist for this manuscript. It names each unresolved reference or in-text citation and requests the authoritative source details or a decision to revise the dependent claim.</p></div><a className="button button-secondary" href={`/api/manuscripts/${manuscript.id}/citation-remediation`}>Download citation worklist</a></div>
+        <div className="citation-remediation-action"><div><h3>Build source-backed corrections</h3><p>PenPal retrieves Crossref and OpenAlex candidates, then uses OpenAI only to adjudicate among those supplied records and format a proposal. It will abstain where the evidence is weak; every proposal remains under your approval.</p></div><GenerateCitationProposalsButton manuscriptId={manuscript.id} /></div>
+        <div className="citation-remediation-action"><div><h3>Turn the remaining gaps into author queries</h3><p>Download an exact worklist for references and in-text citations that still need an authoritative source or a decision to revise the dependent claim.</p></div><a className="button button-secondary" href={`/api/manuscripts/${manuscript.id}/citation-remediation`}>Download citation worklist</a></div>
         {citationRun.error_summary ? <p className="form-message error">{citationRun.error_summary}</p> : null}
         {references?.length ? <div className="reference-list">{references.map((reference) => <article className="reference" key={reference.id}><div className="reference-meta"><span className={`reference-status reference-${reference.verification_status}`}>{reference.verification_status.replaceAll("_", " ")}</span><span>{reference.citation_count} in-text mention{reference.citation_count === 1 ? "" : "s"}</span></div><p>{reference.raw_reference}</p>{reference.doi ? <p className="reference-doi">DOI parsed: {reference.doi}</p> : null}{reference.verification_reason ? <p className="reference-reason">{reference.verification_reason}</p> : null}</article>)}</div> : <p className="empty-state">No references were parsed from this run. Check the heading and source document, then rerun verification.</p>}
       </section> : null}
