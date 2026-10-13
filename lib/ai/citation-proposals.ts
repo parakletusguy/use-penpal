@@ -192,7 +192,10 @@ function isEvidenceBound(reference: SourceReference, candidate: CandidateForMode
 function isDirectDoiRecovery(reference: SourceReference, candidate: CandidateForModel) {
   return Boolean(reference.doi && candidate.doiMatch === true && candidate.metadata.doi
     && normalise(reference.doi) === normalise(candidate.metadata.doi)
-    && candidate.metadata.title && candidate.metadata.publicationYear && candidate.metadata.authors.length);
+    && candidate.metadata.title && candidate.metadata.publicationYear && candidate.metadata.authors.length
+    // A DOI can itself be mistyped. Require the supplied title to identify the same work
+    // before treating that DOI as a correction authority for the rest of the entry.
+    && candidate.titleSimilarity >= 0.72);
 }
 
 function initials(given: string) {

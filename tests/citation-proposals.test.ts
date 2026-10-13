@@ -101,8 +101,8 @@ test("recovers a complete reference directly from a resolving DOI when the suppl
     ...reference,
     firstAuthor: "Wrong",
     publicationYear: 1999,
-    rawReference: "Wrong, A. (1999). An unrelated title. https://doi.org/10.1234/example.1",
-    title: "An unrelated title",
+    rawReference: "Wrong, A. (1999). A careful study of reliable metadata. https://doi.org/10.1234/example.1",
+    title: "A careful study of reliable metadata",
   };
   const restore = installFetch("unused");
   const previousKey = process.env.OPENAI_API_KEY;
