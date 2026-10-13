@@ -17,14 +17,14 @@ const reference = {
 const crossrefWork = {
   message: {
     DOI: "10.1234/example.1",
-    author: [{ family: "Smith" }],
+    author: [{ family: "Smith", given: "Jane" }],
     issued: { "date-parts": [[2024]] },
     title: ["A careful study of reliable metadata"],
     "container-title": ["Journal of Records"],
   },
 };
 
-function installFetch(proposedReference: string, work = crossrefWork) {
+function installFetch(proposedReference: string, work: unknown = crossrefWork) {
   const previous = globalThis.fetch;
   globalThis.fetch = async (input) => {
     const url = String(input);
@@ -90,6 +90,29 @@ test("rejects a plausible-sounding candidate whose source title, author, and yea
   process.env.OPENAI_API_KEY = "test-key";
   try {
     assert.deepEqual(await createCitationProposals([reference]), []);
+  } finally {
+    restore();
+    process.env.OPENAI_API_KEY = previousKey;
+  }
+});
+
+test("recovers a complete reference directly from a resolving DOI when the supplied metadata conflicts", async () => {
+  const doiReference = {
+    ...reference,
+    firstAuthor: "Wrong",
+    publicationYear: 1999,
+    rawReference: "Wrong, A. (1999). An unrelated title. https://doi.org/10.1234/example.1",
+    title: "An unrelated title",
+  };
+  const restore = installFetch("unused");
+  const previousKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "test-key";
+  try {
+    const proposals = await createCitationProposals([doiReference]);
+    assert.equal(proposals.length, 1);
+    assert.equal(proposals[0].resolution, "doi_canonical_recovery");
+    assert.equal(proposals[0].autoApplyEligible, false);
+    assert.match(proposals[0].formattedReference, /Smith, J\. \(2024\)\. A careful study of reliable metadata\./);
   } finally {
     restore();
     process.env.OPENAI_API_KEY = previousKey;

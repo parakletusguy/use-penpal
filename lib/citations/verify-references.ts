@@ -33,11 +33,15 @@ type Provider = "crossref" | "openalex";
 type LookupType = "doi" | "bibliographic" | "title";
 
 type ProviderMetadata = {
+  authors: string[];
   containerTitle: string | null;
   doi: string | null;
   firstAuthor: string | null;
+  issue: string | null;
+  page: string | null;
   publicationYear: number | null;
   title: string | null;
+  volume: string | null;
 };
 
 export type Candidate = {
@@ -225,6 +229,15 @@ function readCrossrefCandidate(value: unknown, lookupType: LookupType): Candidat
   const titles = Array.isArray(message.title) ? message.title : [];
   const authors = Array.isArray(message.author) ? message.author : [];
   const first = object(authors[0]);
+  const authorNames = authors.flatMap((value) => {
+    const author = object(value);
+    if (!author) return [];
+    const family = text(author.family);
+    const given = text(author.given);
+    const literal = text(author.name);
+    if (family && given) return [`${family}, ${given}`];
+    return [family ?? literal].filter((name): name is string => Boolean(name));
+  });
   const issued = object(message.issued) ?? object(message["published-print"]) ?? object(message["published-online"]);
   const dateParts = issued && Array.isArray(issued["date-parts"]) ? issued["date-parts"] : [];
   const firstDatePart = Array.isArray(dateParts[0]) ? dateParts[0][0] : null;
@@ -237,11 +250,15 @@ function readCrossrefCandidate(value: unknown, lookupType: LookupType): Candidat
     id: doi,
     lookupType,
     metadata: {
+      authors: authorNames,
       containerTitle: text(containerTitles[0]),
       doi,
       firstAuthor: first ? text(first.family) : null,
+      issue: text(message.issue),
+      page: text(message.page),
       publicationYear: typeof firstDatePart === "number" ? firstDatePart : null,
       title,
+      volume: text(message.volume),
     },
     provider: "crossref",
     providerUrl: doi ? `https://doi.org/${doi}` : null,
@@ -276,11 +293,20 @@ function readOpenAlexCandidate(value: unknown, itemIndex = 0): Candidate | null 
     id: text(item.id),
     lookupType: "title",
     metadata: {
+      authors: authorships.flatMap((authorship) => {
+        const record = object(authorship);
+        const recordAuthor = record ? object(record.author) : null;
+        const displayName = recordAuthor ? text(recordAuthor.display_name) : null;
+        return displayName ? [displayName] : [];
+      }),
       containerTitle: source ? text(source.display_name) : null,
       doi,
       firstAuthor: author ? text(author.display_name)?.split(/\s+/).at(-1) ?? null : null,
+      issue: text(item.biblio && object(item.biblio)?.issue),
+      page: text(item.biblio && object(item.biblio)?.first_page),
       publicationYear: typeof item.publication_year === "number" ? item.publication_year : null,
       title,
+      volume: text(item.biblio && object(item.biblio)?.volume),
     },
     provider: "openalex",
     providerUrl: text(item.id),
@@ -481,11 +507,15 @@ async function verifyReference(reference: ParsedReference): Promise<ReferenceVer
     providerUrl: candidate?.providerUrl ?? null,
     providerWorkId: candidate?.id ?? null,
     receivedMetadata: candidate?.metadata ?? {
+      authors: [],
       containerTitle: null,
       doi: null,
       firstAuthor: null,
+      issue: null,
+      page: null,
       publicationYear: null,
       title: null,
+      volume: null,
     },
     referenceOrder: reference.order,
     requestFingerprint: fingerprint(reference),

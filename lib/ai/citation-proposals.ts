@@ -7,11 +7,15 @@ type CandidateForModel = {
   doiMatch: boolean | null;
   index: number;
   metadata: {
+    authors: string[];
     containerTitle: string | null;
     doi: string | null;
     firstAuthor: string | null;
+    issue: string | null;
+    page: string | null;
     publicationYear: number | null;
     title: string | null;
+    volume: string | null;
   };
   provider: "crossref" | "openalex";
   providerUrl: string | null;
@@ -37,6 +41,7 @@ export type CitationProposal = {
   rationale: string;
   referenceId: number;
   referenceOrder: number;
+  resolution: "matched_metadata" | "doi_canonical_recovery";
   sourceReference: string;
 };
 
@@ -184,6 +189,36 @@ function isEvidenceBound(reference: SourceReference, candidate: CandidateForMode
   return candidate.score >= 0.72 && authorMatches && yearMatches && titleMatches;
 }
 
+function isDirectDoiRecovery(reference: SourceReference, candidate: CandidateForModel) {
+  return Boolean(reference.doi && candidate.doiMatch === true && candidate.metadata.doi
+    && normalise(reference.doi) === normalise(candidate.metadata.doi)
+    && candidate.metadata.title && candidate.metadata.publicationYear && candidate.metadata.authors.length);
+}
+
+function initials(given: string) {
+  return given.split(/[\s.-]+/).filter(Boolean).map((part) => `${part[0]?.toUpperCase() ?? ""}.`).join(" ");
+}
+
+function formatAuthor(value: string) {
+  const [family, given] = value.split(",", 2).map((part) => part.trim());
+  return family && given ? `${family}, ${initials(given)}` : value;
+}
+
+function formatCanonicalReference(candidate: CandidateForModel) {
+  const metadata = candidate.metadata;
+  if (!metadata.title || !metadata.publicationYear || !metadata.doi || !metadata.authors.length) return null;
+  const authors = metadata.authors.map(formatAuthor);
+  const authorText = authors.length === 1
+    ? authors[0]
+    : authors.length === 2
+      ? `${authors[0]} & ${authors[1]}`
+      : `${authors.slice(0, -1).join(", ")}, & ${authors.at(-1)}`;
+  const journalDetail = [metadata.containerTitle, metadata.volume, metadata.issue ? `(${metadata.issue})` : null]
+    .filter(Boolean)
+    .join(", ");
+  return `${authorText} (${metadata.publicationYear}). ${metadata.title}.${journalDetail ? ` ${journalDetail}` : ""}${metadata.page ? `, ${metadata.page}` : ""}. https://doi.org/${metadata.doi}`;
+}
+
 export async function createCitationProposals(references: SourceReference[]): Promise<CitationProposal[]> {
   const candidatesByReference = await Promise.all(references.map(async (reference) => {
     const candidates = rankReferenceCandidates(reference, await findReferenceCandidates(reference))
@@ -203,8 +238,27 @@ export async function createCitationProposals(references: SourceReference[]): Pr
   }));
   const proposed: CitationProposal[] = [];
 
-  for (let offset = 0; offset < candidatesByReference.length; offset += 8) {
-    const batch = candidatesByReference.slice(offset, offset + 8).filter((item) => item.candidates.length);
+  const remaining = candidatesByReference.filter((item) => {
+    const directCandidate = item.candidates.find((candidate) => isDirectDoiRecovery(item.reference, candidate) && !isEvidenceBound(item.reference, candidate));
+    if (!directCandidate) return true;
+    const formattedReference = formatCanonicalReference(directCandidate);
+    if (!formattedReference) return true;
+    proposed.push({
+      autoApplyEligible: false,
+      candidate: directCandidate,
+      formattedReference,
+      modelConfidence: 1,
+      rationale: "The supplied DOI resolves directly to this live provider record. PenPal recovered the complete reference from that DOI because the supplied author, title, or year metadata conflicts with the DOI record.",
+      referenceId: item.reference.referenceId,
+      referenceOrder: item.reference.order,
+      resolution: "doi_canonical_recovery",
+      sourceReference: item.reference.rawReference,
+    });
+    return false;
+  });
+
+  for (let offset = 0; offset < remaining.length; offset += 8) {
+    const batch = remaining.slice(offset, offset + 8).filter((item) => item.candidates.length);
     if (!batch.length) continue;
     const response = await askModel(batch);
     const responseItems = Array.isArray(response.proposals) ? response.proposals : [];
@@ -223,6 +277,7 @@ export async function createCitationProposals(references: SourceReference[]): Pr
         rationale: proposal.rationale,
         referenceId: item.reference.referenceId,
         referenceOrder: item.reference.order,
+        resolution: "matched_metadata",
         sourceReference: item.reference.rawReference,
       });
     }
