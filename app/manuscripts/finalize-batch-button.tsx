@@ -14,7 +14,7 @@ type FinalizeBatchButtonProps = {
 };
 
 function readyForFinalisation(manuscript: ManuscriptForFinalisation) {
-  return ["ready_to_edit", "ready_to_export"].includes(manuscript.workflowStatus);
+  return ["ready_to_edit", "ready_to_export", "exported"].includes(manuscript.workflowStatus);
 }
 
 function displayTitle(manuscript: ManuscriptForFinalisation) {

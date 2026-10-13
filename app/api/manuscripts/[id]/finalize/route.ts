@@ -51,21 +51,12 @@ export async function POST(
     .order("generated_from_version", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (existingRevision && manuscript.workflow_status === "exported") {
-    return NextResponse.json({
-      applied: 0,
-      authorQueries: 0,
-      reused: true,
-      revisedName: existingRevision.display_name,
-      skipped: 0,
-    });
-  }
-
   const { count: undecidedCount, error: undecidedError } = await supabase
     .from("edit_suggestions")
     .select("id", { count: "exact", head: true })
     .eq("manuscript_id", manuscriptId)
     .eq("editor_id", editorId)
+    .neq("suggestion_type", "author_query")
     .eq("suggestion_status", "proposed");
   if (undecidedError) return NextResponse.json({ error: "PenPal could not confirm the editorial decisions." }, { status: 422 });
   if (undecidedCount) {
@@ -76,7 +67,7 @@ export async function POST(
 
   const { data: approvedSuggestions, error: suggestionsError } = await supabase
     .from("edit_suggestions")
-    .select("id, original_text, proposed_text, suggestion_type")
+    .select("id, original_text, proposed_text, suggestion_type, applied_in_version")
     .eq("manuscript_id", manuscriptId)
     .eq("editor_id", editorId)
     .eq("suggestion_status", "approved")
@@ -85,12 +76,22 @@ export async function POST(
 
   const authorQueries = (approvedSuggestions ?? []).filter((suggestion) => suggestion.suggestion_type === "author_query");
   const mechanicalEdits = (approvedSuggestions ?? [])
-    .filter((suggestion) => suggestion.suggestion_type !== "author_query")
+    .filter((suggestion) => suggestion.suggestion_type !== "author_query" && suggestion.applied_in_version === null)
     .map((suggestion) => ({ id: suggestion.id, originalText: suggestion.original_text, proposedText: suggestion.proposed_text }));
+
+  if (!mechanicalEdits.length) {
+    return NextResponse.json({
+      applied: 0,
+      authorQueries: authorQueries.length,
+      reused: true,
+      revisedName: existingRevision?.display_name ?? revisedFileName(manuscript.source_file_name),
+      skipped: 0,
+    });
+  }
 
   const { data: sourceFile, error: sourceError } = await supabase.storage
     .from("penpal-manuscripts")
-    .download(manuscript.original_storage_path);
+    .download(existingRevision?.storage_path ?? manuscript.original_storage_path);
   if (sourceError || !sourceFile) return NextResponse.json({ error: "The private source copy could not be read." }, { status: 409 });
 
   let revision;
