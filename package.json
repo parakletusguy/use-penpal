@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint .",
-    "test:citations": "node --test --experimental-strip-types tests/verify-references.test.ts",
+    "test:citations": "node --test --experimental-strip-types tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
