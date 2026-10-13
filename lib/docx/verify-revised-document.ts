@@ -19,7 +19,9 @@ export async function verifyRevisedDocument(
     .filter((edit) => appliedIds.has(edit.id))
     .flatMap((edit) => {
       const comparableProposal = edit.proposedText?.replace(/\s+/g, " ").trim();
-      return comparableProposal && comparableRevisedText.includes(comparableProposal) ? [] : [edit.id];
+      if (comparableProposal) return comparableRevisedText.includes(comparableProposal) ? [] : [edit.id];
+      const comparableOriginal = edit.originalText?.replace(/\s+/g, " ").trim();
+      return comparableOriginal && !comparableRevisedText.includes(comparableOriginal) ? [] : [edit.id];
     });
   const structure = await assessIjsdsDocxStructure(revisedDocument.bytes, revisedText);
 

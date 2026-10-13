@@ -103,8 +103,8 @@ export async function createRevisedDocument(source: ArrayBuffer | Buffer, edits:
   const skippedEdits: SkippedEdit[] = [];
 
   for (const edit of edits) {
-    if (!edit.originalText?.trim() || !edit.proposedText?.trim()) {
-      skippedEdits.push({ id: edit.id, reason: "The proposal does not contain both source and replacement text." });
+    if (!edit.originalText?.trim() || edit.proposedText === null) {
+      skippedEdits.push({ id: edit.id, reason: "The proposal does not contain source text or a resolved action." });
       continue;
     }
 
