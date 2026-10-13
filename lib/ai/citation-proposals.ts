@@ -3,6 +3,8 @@ import { findReferenceCandidates, rankReferenceCandidates, type ParsedReference 
 type SourceReference = ParsedReference & { referenceId: number };
 
 type CandidateForModel = {
+  authorMatch: boolean | null;
+  doiMatch: boolean | null;
   index: number;
   metadata: {
     containerTitle: string | null;
@@ -14,6 +16,8 @@ type CandidateForModel = {
   provider: "crossref" | "openalex";
   providerUrl: string | null;
   score: number;
+  titleSimilarity: number;
+  yearMatch: boolean | null;
 };
 
 type ModelProposal = {
@@ -173,16 +177,27 @@ function isAutoApplyEligible(reference: SourceReference, candidate: CandidateFor
     && Boolean(reference.doi && candidate.metadata.doi && normalise(reference.doi) === normalise(candidate.metadata.doi));
 }
 
+function isEvidenceBound(reference: SourceReference, candidate: CandidateForModel) {
+  const authorMatches = !reference.firstAuthor || candidate.authorMatch === true;
+  const yearMatches = !reference.publicationYear || candidate.yearMatch === true;
+  const titleMatches = !reference.title || candidate.titleSimilarity >= 0.72;
+  return candidate.score >= 0.72 && authorMatches && yearMatches && titleMatches;
+}
+
 export async function createCitationProposals(references: SourceReference[]): Promise<CitationProposal[]> {
   const candidatesByReference = await Promise.all(references.map(async (reference) => {
     const candidates = rankReferenceCandidates(reference, await findReferenceCandidates(reference))
       .slice(0, 5)
       .map((candidate, index) => ({
+        authorMatch: candidate.score.authorMatch,
+        doiMatch: candidate.score.doiMatch,
         index: index + 1,
         metadata: candidate.metadata,
         provider: candidate.provider,
         providerUrl: candidate.providerUrl,
         score: Number(candidate.score.confidence.toFixed(3)),
+        titleSimilarity: Number(candidate.score.titleSimilarity.toFixed(3)),
+        yearMatch: candidate.score.yearMatch,
       }));
     return { candidates, reference };
   }));
@@ -199,7 +214,7 @@ export async function createCitationProposals(references: SourceReference[]): Pr
       if (!proposal || proposal.recommendation !== "propose" || !proposal.selectedCandidateIndex) continue;
       const item = byOrder.get(proposal.referenceOrder);
       const candidate = item?.candidates.find((current) => current.index === proposal.selectedCandidateIndex);
-      if (!item || !candidate || !supportsFormattedReference(proposal.formattedReference, candidate)) continue;
+      if (!item || !candidate || !isEvidenceBound(item.reference, candidate) || !supportsFormattedReference(proposal.formattedReference, candidate)) continue;
       proposed.push({
         autoApplyEligible: isAutoApplyEligible(item.reference, candidate, proposal.modelConfidence),
         candidate,

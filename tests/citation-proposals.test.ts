@@ -24,11 +24,11 @@ const crossrefWork = {
   },
 };
 
-function installFetch(proposedReference: string) {
+function installFetch(proposedReference: string, work = crossrefWork) {
   const previous = globalThis.fetch;
   globalThis.fetch = async (input) => {
     const url = String(input);
-    if (url.startsWith("https://api.crossref.org/works/")) return new Response(JSON.stringify(crossrefWork), { status: 200 });
+    if (url.startsWith("https://api.crossref.org/works/")) return new Response(JSON.stringify(work), { status: 200 });
     if (url.startsWith("https://api.crossref.org/works")) return new Response(JSON.stringify({ message: { items: [] } }), { status: 200 });
     if (url.startsWith("https://api.openalex.org/works")) return new Response(JSON.stringify({ results: [] }), { status: 200 });
     if (url === "https://api.openai.com/v1/responses") {
@@ -65,6 +65,27 @@ test("creates an editor-review proposal only from provider-backed metadata", asy
 
 test("rejects a model-formatted reference that omits provider evidence", async () => {
   const restore = installFetch("Smith, J. (2024). Unrelated article.");
+  const previousKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "test-key";
+  try {
+    assert.deepEqual(await createCitationProposals([reference]), []);
+  } finally {
+    restore();
+    process.env.OPENAI_API_KEY = previousKey;
+  }
+});
+
+test("rejects a plausible-sounding candidate whose source title, author, and year do not match", async () => {
+  const unrelatedWork = {
+    message: {
+      DOI: "10.9999/unrelated.9",
+      author: [{ family: "Gilbert" }],
+      issued: { "date-parts": [[2022]] },
+      title: ["No fault divorce: how the new law will reduce family conflict"],
+      "container-title": ["Family Law Review"],
+    },
+  };
+  const restore = installFetch("Gilbert. (2022). No fault divorce: how the new law will reduce family conflict. Family Law Review. https://doi.org/10.9999/unrelated.9", unrelatedWork);
   const previousKey = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = "test-key";
   try {

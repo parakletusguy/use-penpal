@@ -31,7 +31,7 @@ export async function POST(
   const [manuscriptResult, runResult, suggestionResult] = await Promise.all([
     supabase.from("manuscripts").select("id, consent_status").eq("id", manuscriptId).eq("editor_id", editorId).maybeSingle(),
     supabase.from("citation_verification_runs").select("id, reference_count").eq("manuscript_id", manuscriptId).eq("editor_id", editorId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-    supabase.from("edit_suggestions").select("id").eq("manuscript_id", manuscriptId).eq("editor_id", editorId).eq("suggestion_type", "citation"),
+    supabase.from("edit_suggestions").select("id").eq("manuscript_id", manuscriptId).eq("editor_id", editorId).eq("suggestion_type", "citation").in("suggestion_status", ["proposed", "approved", "applied", "modified"]),
   ]);
   const manuscript = manuscriptResult.data;
   const run = runResult.data;
