@@ -84,8 +84,12 @@ export type CitationVerificationResult = {
 const DOI_PATTERN = /(?:https?:\/\/(?:dx\.)?doi\.org\/)?(10\.\d{4,9}\/[\-._;()/:A-Z0-9]+)(?=[\s)>\]}.;,]|$)/i;
 const PARENTHETICAL_CITATION_PATTERN = /\(([^()]{1,320}?(?:19|20)\d{2}[a-z]?[^()]*)\)/gi;
 const NARRATIVE_CITATION_PATTERN = /\b([A-Z][A-Za-z'’\-]{1,80})\s*\((19|20)(\d{2})[a-z]?\)/g;
-const REFERENCE_HEADING_PATTERN = /(?:^|\n)\s*(?:references|bibliography)\s*(?:\n|$)/i;
-const REFERENCE_START_PATTERN = /^[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’\-]+(?:,|\s+&|\s+and\s+|\s+[A-Z]\.)[\s\S]{0,220}?(?:19|20)\d{2}[a-z]?/;
+const REFERENCE_HEADING_PATTERN = /(?:^|\n)\s*(?:references|reference\s+list|works\s+cited|bibliography)\s*(?:\n|$)/i;
+// This deliberately requires a name followed closely by a year. It recognizes compound
+// surnames (for example, “O’Connell Corcoran”) that the earlier, comma-only matcher
+// treated as continuations of the preceding entry.
+const REFERENCE_START_PATTERN = /^(?:\[?\d+[.)\]]?\s+)?\p{Lu}[\p{L}'’\-]*(?:\s+\p{Lu}[\p{L}'’\-]*){0,4},\s*[\s\S]{0,120}?\(?\s*(?:19|20)\d{2}[a-z]?\s*\)?/u;
+const INLINE_REFERENCE_START = /(?:^|\s)(\p{Lu}[\p{L}'\-]*(?:\s+\p{Lu}[\p{L}'\-]*){0,3},\s*(?:[A-Z]\.\s*)+\(\s*(?:19|20)\d{2}[a-z]?\s*\))/gu;
 
 function text(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -118,7 +122,7 @@ function parseYear(value: string) {
 
 function firstAuthor(value: string, publicationYear: number | null) {
   const beforeYear = publicationYear ? value.slice(0, Math.max(0, value.indexOf(String(publicationYear)))) : value;
-  const match = beforeYear.match(/[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’\-]{1,80}/);
+  const match = beforeYear.match(/\p{Lu}[\p{L}'’\-]{1,80}/u);
   return match?.[0] ?? null;
 }
 
@@ -128,6 +132,33 @@ function inferTitle(value: string, publicationYear: number | null, doi: string |
   const [candidate] = tail.replace(/^[a-z)?.,\s]+/i, "").split(/\.\s+(?=[A-Z])/);
   const title = candidate?.replace(/\s+/g, " ").replace(/[.\s]+$/, "").trim() ?? "";
   return title.length >= 5 ? title : null;
+}
+
+function splitCollapsedReferenceEntries(value: string) {
+  const starts: number[] = [];
+  // Smart quotes are common in Word exports. Replacing them only for boundary
+  // detection keeps string offsets intact, so the original reference text is saved.
+  const scanValue = value.replace(/[’‘]/g, "'");
+
+  for (const match of scanValue.matchAll(INLINE_REFERENCE_START)) {
+    const candidate = match[1];
+    if (!candidate || match.index === undefined) continue;
+    const start = match.index + match[0].lastIndexOf(candidate);
+    if (!start) continue;
+
+    const prefix = scanValue.slice(0, start).trimEnd();
+    // A name preceded by “&” is a co-author, not another reference. A collapsed
+    // entry must follow a completed sentence or a DOI, both of which can be checked
+    // without relying on a model to invent a boundary.
+    if (/[&;,]$/.test(prefix)) continue;
+    if (!(/[.)\]]$/.test(prefix) || /10\.\d{4,9}\/[\-._;()/:A-Z0-9]+$/i.test(prefix))) continue;
+    starts.push(start);
+  }
+
+  if (!starts.length) return [value];
+  return [value.slice(0, starts[0]), ...starts.map((start, index) => value.slice(start, starts[index + 1]))]
+    .map((fragment) => fragment.trim())
+    .filter(Boolean);
 }
 
 function findReferenceLines(manuscriptText: string) {
@@ -142,11 +173,17 @@ function findReferenceLines(manuscriptText: string) {
   for (const [index, originalLine] of lines.entries()) {
     const value = originalLine.replace(/\s+/g, " ").trim();
     if (!value) continue;
-    const previous = entries.at(-1);
-    if (!previous || REFERENCE_START_PATTERN.test(value)) {
-      entries.push({ line: firstLine + index + 1, value });
-    } else {
-      previous.value = `${previous.value} ${value}`;
+
+    // DOCX extraction occasionally collapses two bibliography paragraphs into one line.
+    // Preserve their source line while splitting only at another author/year fingerprint.
+    const fragments = splitCollapsedReferenceEntries(value);
+    for (const fragment of fragments) {
+      const previous = entries.at(-1);
+      if (!previous || REFERENCE_START_PATTERN.test(fragment)) {
+        entries.push({ line: firstLine + index + 1, value: fragment });
+      } else {
+        previous.value = `${previous.value} ${fragment}`;
+      }
     }
   }
 
