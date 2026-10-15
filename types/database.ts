@@ -14,6 +14,18 @@ export type Database = {
   }
   public: {
     Tables: {
+      author_audit_events: {
+        Row: { created_at: string; event_data: Json; event_type: string; id: number; owner_id: string; project_id: number | null }
+        Insert: { created_at?: string; event_data?: Json; event_type: string; id?: number; owner_id: string; project_id?: number | null }
+        Update: { created_at?: string; event_data?: Json; event_type?: string; id?: number; owner_id?: string; project_id?: number | null }
+        Relationships: [{ foreignKeyName: "author_audit_events_project_owner_fkey"; columns: ["project_id", "owner_id"]; isOneToOne: false; referencedRelation: "author_projects"; referencedColumns: ["id", "owner_id"] }]
+      }
+      author_projects: {
+        Row: { created_at: string; id: number; intended_journal: string | null; journal_profile_version: string; owner_id: string; research_area: string | null; title: string; updated_at: string; workspace_status: string }
+        Insert: { created_at?: string; id?: number; intended_journal?: string | null; journal_profile_version?: string; owner_id: string; research_area?: string | null; title: string; updated_at?: string; workspace_status?: string }
+        Update: { created_at?: string; id?: number; intended_journal?: string | null; journal_profile_version?: string; owner_id?: string; research_area?: string | null; title?: string; updated_at?: string; workspace_status?: string }
+        Relationships: []
+      }
       audit_events: {
         Row: {
           created_at: string
@@ -501,6 +513,24 @@ export type Database = {
             referencedColumns: ["id", "editor_id"]
           },
         ]
+      }
+      project_sources: {
+        Row: { approval_recorded_at: string | null; approved_for_synthesis: boolean; citation: string; created_at: string; doi: string | null; id: number; owner_id: string; project_id: number; source_type: string; source_url: string | null; verification_status: string }
+        Insert: { approval_recorded_at?: string | null; approved_for_synthesis?: boolean; citation: string; created_at?: string; doi?: string | null; id?: number; owner_id: string; project_id: number; source_type?: string; source_url?: string | null; verification_status?: string }
+        Update: { approval_recorded_at?: string | null; approved_for_synthesis?: boolean; citation?: string; created_at?: string; doi?: string | null; id?: number; owner_id?: string; project_id?: number; source_type?: string; source_url?: string | null; verification_status?: string }
+        Relationships: [{ foreignKeyName: "project_sources_project_owner_fkey"; columns: ["project_id", "owner_id"]; isOneToOne: false; referencedRelation: "author_projects"; referencedColumns: ["id", "owner_id"] }]
+      }
+      readiness_checks: {
+        Row: { check_status: string; created_at: string; criterion_key: string; criterion_label: string; guidance: string; id: number; owner_id: string; project_id: number; updated_at: string }
+        Insert: { check_status?: string; created_at?: string; criterion_key: string; criterion_label: string; guidance: string; id?: number; owner_id: string; project_id: number; updated_at?: string }
+        Update: { check_status?: string; created_at?: string; criterion_key?: string; criterion_label?: string; guidance?: string; id?: number; owner_id?: string; project_id?: number; updated_at?: string }
+        Relationships: [{ foreignKeyName: "readiness_checks_project_owner_fkey"; columns: ["project_id", "owner_id"]; isOneToOne: false; referencedRelation: "author_projects"; referencedColumns: ["id", "owner_id"] }]
+      }
+      research_tasks: {
+        Row: { created_at: string; id: number; owner_id: string; project_id: number; prompt: string; target_section: string | null; task_status: string; updated_at: string }
+        Insert: { created_at?: string; id?: number; owner_id: string; project_id: number; prompt: string; target_section?: string | null; task_status?: string; updated_at?: string }
+        Update: { created_at?: string; id?: number; owner_id?: string; project_id?: number; prompt?: string; target_section?: string | null; task_status?: string; updated_at?: string }
+        Relationships: [{ foreignKeyName: "research_tasks_project_owner_fkey"; columns: ["project_id", "owner_id"]; isOneToOne: false; referencedRelation: "author_projects"; referencedColumns: ["id", "owner_id"] }]
       }
       review_reports: {
         Row: {

@@ -14,3 +14,14 @@ export async function requireEditor() {
 
   return { editorId, email, supabase };
 }
+
+export async function requireAuthor() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getClaims();
+  const ownerId = typeof data?.claims?.sub === "string" ? data.claims.sub : null;
+  const email = typeof data?.claims?.email === "string" ? data.claims.email.toLowerCase() : null;
+
+  if (error || !ownerId) redirect("/login");
+
+  return { email, ownerId, supabase };
+}
